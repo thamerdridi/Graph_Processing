@@ -5,10 +5,6 @@ use petgraph::visit::EdgeRef;
 use std::i32;
 
 /// Runs the Bellman–Ford algorithm on the given graph starting from the node with label `start`.
-/// Returns a tuple with:
-///   - A HashMap mapping each node’s label to its minimum distance from the start.
-///   - A predecessor map (node label -> previous node label on the shortest path).
-/// Returns None if the start node is not found or a negative weight cycle is detected.
 pub fn bellman_ford<Ty>(
     graph: &Graph<String, i32, Ty>,
     start: &str,

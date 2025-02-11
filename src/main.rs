@@ -8,6 +8,7 @@ use std::collections::HashMap;
 use std::io::{self, Write};
 
 /// Reconstructs the shortest path from the predecessors map.
+/// Returns a vector of node labels representing the path if found.
 fn reconstruct_path(
     predecessors: &HashMap<String, String>,
     start: &str,
@@ -28,7 +29,8 @@ fn reconstruct_path(
     Some(path)
 }
 
-/// Generic helper to run both BFS and Bellman–Ford on the given graph.
+/// Generic helper to run BFS, Bellman–Ford, PageRank, and Label Propagation on the given graph.
+/// This function is generic over any graph with edge type Ty.
 fn run_algorithms<Ty>(g: &Graph<String, i32, Ty>)
 where
     Ty: EdgeType,
@@ -45,7 +47,6 @@ where
         .read_line(&mut bfs_start)
         .expect("Failed to read starting node");
     let bfs_start = bfs_start.trim();
-
     println!("Enter the target node label for BFS:");
     let mut bfs_target = String::new();
     io::stdin()
@@ -53,10 +54,8 @@ where
         .expect("Failed to read target node");
     let bfs_target = bfs_target.trim();
 
-    // Convert the petgraph graph into a simple adjacency list.
     let adj_list = algorithms::bfs::convert_to_adj_list(g);
     let (bfs_distances, bfs_predecessors) = algorithms::bfs::bfs(&adj_list, bfs_start);
-
     if let Some(distance) = bfs_distances.get(bfs_target) {
         println!(
             "\nBFS: Shortest distance from '{}' to '{}' is: {}",
@@ -85,7 +84,6 @@ where
         .read_line(&mut bf_start)
         .expect("Failed to read starting node");
     let bf_start = bf_start.trim();
-
     println!("Enter the target node label for Bellman–Ford:");
     let mut bf_target = String::new();
     io::stdin()
@@ -93,37 +91,67 @@ where
         .expect("Failed to read target node");
     let bf_target = bf_target.trim();
 
-    if let Some((bf_distances, bf_predecessors)) = algorithms::bellman_ford::bellman_ford(g, bf_start)
+    if let Some((bf_distances, bf_predecessors)) =
+        algorithms::bellman_ford::bellman_ford(g, bf_start)
     {
+        // Check if the target is unreachable (i.e. distance is still infinity)
         if let Some(distance) = bf_distances.get(bf_target) {
-            println!(
-                "\nBellman–Ford: Shortest distance from '{}' to '{}' is: {}",
-                bf_start, bf_target, distance
-            );
-            if let Some(path) = reconstruct_path(&bf_predecessors, bf_start, bf_target) {
-                println!("Bellman–Ford: Shortest path: {:?}", path);
+            if *distance == i32::MAX {
+                println!(
+                    "\nBellman–Ford: Target node '{}' is not reachable from '{}'.",
+                    bf_target, bf_start
+                );
             } else {
-                println!("Bellman–Ford: Unable to reconstruct path.");
+                println!(
+                    "\nBellman–Ford: Shortest distance from '{}' to '{}' is: {}",
+                    bf_start, bf_target, distance
+                );
+                if let Some(path) = reconstruct_path(&bf_predecessors, bf_start, bf_target) {
+                    println!("Bellman–Ford: Shortest path: {:?}", path);
+                } else {
+                    println!("Bellman–Ford: Unable to reconstruct path.");
+                }
             }
         } else {
             println!(
-                "Bellman–Ford: Target node '{}' is not reachable from '{}'.",
-                bf_target, bf_start
+                "\nBellman–Ford: Target node '{}' is not present in the graph.",
+                bf_target
             );
         }
     } else {
         println!("Bellman–Ford failed (start node not found or negative cycle detected).");
     }
+
+    // --- PageRank Section ---
+    println!("\nPageRank:");
+    let pr = algorithms::page_rank::page_rank(g);
+    let mut pr_sorted: Vec<_> = pr.iter().collect();
+    pr_sorted.sort_by_key(|&(node, _)| node);
+    println!("PageRank scores for all nodes:");
+    for (node, score) in pr_sorted {
+        println!("  Node {}: {:.6}", node, score);
+    }
+
+    // --- Label Propagation Section ---
+    println!("\nLabel Propagation (Community Detection):");
+    let communities = algorithms::label_propagation::label_propagation(g);
+    // Group nodes by their final community label.
+    let mut community_groups: HashMap<String, Vec<String>> = HashMap::new();
+    for (node, community) in communities.iter() {
+        community_groups.entry(community.clone()).or_default().push(node.clone());
+    }
+    println!("Detected communities:");
+    for (community, nodes) in community_groups {
+        println!("  Community {}: {:?}", community, nodes);
+    }
 }
 
 fn main() {
-    // --- Graph Input Section ---
     println!("Enter graph direction (d for Directed, u for Undirected):");
     let mut direction_input = String::new();
     io::stdin()
         .read_line(&mut direction_input)
         .expect("Failed to read direction");
-
     let direction = if direction_input.trim().eq_ignore_ascii_case("d") {
         GraphDirection::Directed
     } else {
@@ -157,8 +185,10 @@ fn main() {
     // --- Build the Graph ---
     let my_graph = build_graph(&input, direction);
 
+    // Run the algorithms on the generated graph.
     match &my_graph {
         MyGraph::Directed(g) => run_algorithms(g),
         MyGraph::Undirected(g) => run_algorithms(g),
     }
 }
+
