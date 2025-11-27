@@ -343,8 +343,6 @@ fn main() {
         let speedup = cpu_total.as_secs_f64() / gpu_total.as_secs_f64();
         if speedup > 1.0 {
             println!("GPU Speedup: {:.2}x faster", speedup);
-        } else {
-            println!("CPU Speedup: {:.2}x faster", 1.0 / speedup);
         }
     }
 }
