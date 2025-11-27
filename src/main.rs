@@ -324,20 +324,16 @@ fn main() {
     io::stdin().read_line(&mut choice_str).unwrap();
     let choice = choice_str.trim().parse::<u8>().unwrap_or(5);
     
-    // Performance summary tracking
-    let mut cpu_total = std::time::Duration::ZERO;
-    let mut gpu_total = std::time::Duration::ZERO;
-    
     // Run algorithms on CPU
     println!("\n=== CPU Results ===");
     let cpu_start = std::time::Instant::now();
     let (bfs_start, bf_start) = run_algorithms(&g, choice);
-    cpu_total = cpu_start.elapsed();
+    let cpu_total = cpu_start.elapsed();
     
     // Run algorithms on GPU
     let gpu_start = std::time::Instant::now();
     run_cuda_algorithms(&g, choice, bfs_start, bf_start);
-    gpu_total = gpu_start.elapsed();
+    let gpu_total = gpu_start.elapsed();
     
     // Performance Summary
     println!("\n=== Performance Summary ===");
