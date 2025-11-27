@@ -3,7 +3,7 @@ use petgraph::EdgeType;
 use petgraph::visit::EdgeRef;
 use std::collections::HashMap;
 
-/// Computes PageRank for all nodes in the graph using an iterative algorithm.
+// PageRank: iterative algorithm with damping factor 0.85
 pub fn page_rank<Ty>(graph: &Graph<String, i32, Ty>) -> HashMap<String, f64>
 where
     Ty: EdgeType,
@@ -28,8 +28,6 @@ where
 
         for node in graph.node_indices() {
             let mut rank_sum = 0.0;
-            // For directed graphs, sum contributions from incoming edges;
-            // for undirected graphs, treat every edge as bidirectional.
             let incoming = if graph.is_directed() {
                 graph.edges_directed(node, petgraph::Direction::Incoming)
             } else {
@@ -40,11 +38,9 @@ where
                 let source = if graph.is_directed() {
                     edge.source()
                 } else {
-                    // For undirected graphs, determine the neighbor (the node that is not the current one)
                     let (s, t) = (edge.source(), edge.target());
                     if s == node { t } else { s }
                 };
-                // Compute out-degree for the source node.
                 let out_degree = if graph.is_directed() {
                     graph.edges_directed(source, petgraph::Direction::Outgoing).count()
                 } else {
@@ -65,7 +61,6 @@ where
         }
     }
 
-    // Convert from NodeIndex to node label.
     let mut result = HashMap::new();
     for node in graph.node_indices() {
         result.insert(graph[node].clone(), ranks[&node]);

@@ -4,7 +4,7 @@ use std::collections::HashMap;
 use petgraph::visit::EdgeRef;
 use std::i32;
 
-/// Runs the Bellman–Ford algorithm on the given graph starting from the node with label `start`.
+// Bellman-Ford: returns (distances, predecessors) or None if negative cycle detected
 pub fn bellman_ford<Ty>(
     graph: &Graph<String, i32, Ty>,
     start: &str,
@@ -12,20 +12,17 @@ pub fn bellman_ford<Ty>(
 where
     Ty: EdgeType,
 {
-    // Initialize distances: set all to i32::MAX (infinity).
     let mut distances: HashMap<NodeIndex, i32> = HashMap::new();
     let mut predecessors: HashMap<NodeIndex, NodeIndex> = HashMap::new();
     for node in graph.node_indices() {
         distances.insert(node, i32::MAX);
     }
     
-    // Find the start node by label.
     let start_node = graph.node_indices().find(|&node| graph[node] == start)?;
     distances.insert(start_node, 0);
 
     let num_nodes = graph.node_count();
 
-    // Relax edges (num_nodes - 1) times.
     for _ in 0..num_nodes - 1 {
         for edge in graph.edge_references() {
             let u = edge.source();
@@ -37,7 +34,6 @@ where
                     predecessors.insert(v, u);
                 }
             } else {
-                // For undirected, relax in both directions.
                 if distances[&u] != i32::MAX && distances[&u] + weight < distances[&v] {
                     distances.insert(v, distances[&u] + weight);
                     predecessors.insert(v, u);
@@ -50,7 +46,6 @@ where
         }
     }
 
-    // Check for negative weight cycles.
     for edge in graph.edge_references() {
         let u = edge.source();
         let v = edge.target();
@@ -72,7 +67,6 @@ where
         }
     }
 
-    // Convert the results from NodeIndex to node labels.
     let mut result_distances: HashMap<String, i32> = HashMap::new();
     let mut result_predecessors: HashMap<String, String> = HashMap::new();
     for node in graph.node_indices() {

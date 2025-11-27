@@ -3,7 +3,7 @@ use petgraph::EdgeType;
 use petgraph::visit::EdgeRef;
 use std::collections::{HashMap, VecDeque};
 
-/// Converts a petgraph::Graph into a simple adjacency list.
+// Convert petgraph to adjacency list
 pub fn convert_to_adj_list<Ty>(
     graph: &Graph<String, i32, Ty>,
 ) -> HashMap<String, Vec<String>>
@@ -26,10 +26,7 @@ where
     adj_list
 }
 
-/// Performs a standard BFS on the given adjacency list starting from `start`.
-/// Returns a tuple with:
-///   - A HashMap mapping each reachable node label to its distance (number of edges) from start.
-///   - A predecessor map (node label -> previous node label on the shortest path).
+// BFS: returns (distances, predecessors)
 pub fn bfs(adj_list: &HashMap<String, Vec<String>>, start: &str) -> (HashMap<String, i32>, HashMap<String, String>) {
     let mut distances: HashMap<String, i32> = HashMap::new();
     let mut predecessor: HashMap<String, String> = HashMap::new();

@@ -1,1 +1,1 @@
-// Functions to load kernels, manage device memory, and launch kernels from Rust
+// CUDA kernels linked via FFI in main.rs
