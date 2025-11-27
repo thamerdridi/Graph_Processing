@@ -1,8 +1,7 @@
 mod graph;
 mod algorithms;
-mod cuda;
 
-use graph::{build_graph, GraphDirection, MyGraph, CSRGraph};
+use graph::CSRGraph;
 use petgraph::graph::Graph;
 use petgraph::EdgeType;
 use std::collections::HashMap;
@@ -51,82 +50,78 @@ extern "C" {
     );
 }
 
-// CPU algorithm execution: returns starting nodes for BFS and Bellman-Ford
+// CPU algorithm execution using CSR
 fn run_algorithms<Ty>(g: &Graph<String, i32, Ty>, choice: u8) -> (Option<String>, Option<String>)
 where
     Ty: EdgeType,
 {
-    println!("\nGraph created.");
-    println!("Number of nodes: {}", g.node_count());
-    println!("Number of edges: {}", g.edge_count());
+    // Convert to CSR for CPU algorithms
+    let csr_graph = CSRGraph::from_graph(g);
 
-    let mut bfs_start_node = None;
-    let mut bf_start_node = None;
+    let start_node = "0".to_string();
+    let bfs_start_node;
+    let bf_start_node;
 
     // BFS
     if choice == 1 || choice == 5 {
-        println!("\nBFS - Enter starting node:");
-        let mut bfs_start = String::new();
-        io::stdin().read_line(&mut bfs_start).expect("Failed to read");
-        let bfs_start = bfs_start.trim().to_string();
-        bfs_start_node = Some(bfs_start.clone());
+        bfs_start_node = Some(start_node.clone());
 
-        let adj_list = algorithms::bfs::convert_to_adj_list(g);
         let t0 = Instant::now();
-        let (bfs_distances, _) = algorithms::bfs::bfs(&adj_list, &bfs_start);
+        let (bfs_distances, _) = algorithms::bfs::bfs(&csr_graph, &start_node);
         let cpu_time = t0.elapsed();
         
         let reachable = bfs_distances.len();
         let max_dist = bfs_distances.values().max().unwrap_or(&0);
         
-        println!("CPU time: {:?}", cpu_time);
-        println!("Reachable nodes: {}, Max distance: {}", reachable, max_dist);
+        println!("\nBFS:");
+        println!("  CPU time: {:?}", cpu_time);
+        println!("  Reachable: {} nodes, Max distance: {}", reachable, max_dist);
+    } else {
+        bfs_start_node = None;
     }
 
     // Bellman-Ford
     if choice == 2 || choice == 5 {
-        println!("\nBellman-Ford - Enter starting node:");
-        let mut bf_start = String::new();
-        io::stdin().read_line(&mut bf_start).expect("Failed to read");
-        let bf_start = bf_start.trim().to_string();
-        bf_start_node = Some(bf_start.clone());
+        bf_start_node = Some(start_node.clone());
 
         let t1 = Instant::now();
-        let bf_outcome = algorithms::bellman_ford::bellman_ford(g, &bf_start);
+        let bf_outcome = algorithms::bellman_ford::bellman_ford(&csr_graph, &start_node);
         let cpu_time = t1.elapsed();
 
         if let Some((bf_distances, _)) = bf_outcome {
             let reachable = bf_distances.iter().filter(|(_, &d)| d != i32::MAX).count();
-            println!("CPU time: {:?}", cpu_time);
-            println!("Reachable nodes: {}", reachable);
+            println!("\nBellman-Ford:");
+            println!("  CPU time: {:?}", cpu_time);
+            println!("  Reachable: {} nodes", reachable);
         } else {
-            println!("Failed: negative cycle or node not found");
+            println!("\nBellman-Ford: Failed (negative cycle)");
         }
+    } else {
+        bf_start_node = None;
     }
 
     // PageRank
     if choice == 3 || choice == 5 {
-        println!("\nPageRank:");
         let t2 = Instant::now();
-        let pr = algorithms::page_rank::page_rank(g);
+        let pr = algorithms::page_rank::page_rank(&csr_graph);
         let cpu_time = t2.elapsed();
-        println!("CPU time: {:?}", cpu_time);
 
         let mut pr_sorted: Vec<_> = pr.iter().collect();
-        pr_sorted.sort_by_key(|&(node, _)| node);
-        println!("Top 3 nodes:");
+        pr_sorted.sort_by(|a, b| b.1.partial_cmp(a.1).unwrap());
+        
+        println!("\nPageRank:");
+        println!("  CPU time: {:?}", cpu_time);
+        println!("  Top 3 nodes:");
         for (node, score) in pr_sorted.iter().take(3) {
-            println!("  {} -> {:.6}", node, score);
+            println!("    {} -> {:.6}", node, score);
         }
     }
 
     // Label Propagation
     if choice == 4 || choice == 5 {
-        println!("\nLabel Propagation:");
         let t3 = Instant::now();
-        let communities = algorithms::label_propagation::label_propagation(g);
+        let communities = algorithms::label_propagation::label_propagation(&csr_graph);
         let cpu_time = t3.elapsed();
-        println!("CPU time: {:?}", cpu_time);
 
         let mut community_groups: HashMap<String, Vec<String>> = HashMap::new();
         for (node, community) in communities.iter() {
@@ -135,7 +130,10 @@ where
                 .or_default()
                 .push(node.clone());
         }
-        println!("Communities detected: {}", community_groups.len());
+        
+        println!("\nLabel Propagation:");
+        println!("  CPU time: {:?}", cpu_time);
+        println!("  Communities: {}", community_groups.len());
     }
 
     (bfs_start_node, bf_start_node)
@@ -150,7 +148,7 @@ fn run_cuda_algorithms<Ty>(
 ) where
     Ty: EdgeType,
 {
-    println!("\n=== GPU ===");
+    println!("\n=== GPU Results ===");
     let csr_graph = CSRGraph::from_graph(g);
 
     // BFS
@@ -174,8 +172,10 @@ fn run_cuda_algorithms<Ty>(
 
                 let reachable = distances.iter().filter(|&&d| d >= 0).count();
                 let max_dist = distances.iter().filter(|&&d| d >= 0).max().unwrap_or(&0);
-                println!("GPU time: {:?}", gpu_time);
-                println!("Reachable nodes: {}, Max distance: {}", reachable, max_dist);
+                
+                println!("\nBFS:");
+                println!("  GPU time: {:?}", gpu_time);
+                println!("  Reachable: {} nodes, Max distance: {}", reachable, max_dist);
             }
         }
     }
@@ -199,13 +199,14 @@ fn run_cuda_algorithms<Ty>(
                     )
                 };
                 let gpu_time = t1.elapsed();
-                println!("GPU time: {:?}", gpu_time);
 
+                println!("\nBellman-Ford:");
+                println!("  GPU time: {:?}", gpu_time);
                 if result == -1 {
-                    println!("Negative cycle detected!");
+                    println!("  Negative cycle detected");
                 } else {
                     let reachable = distances.iter().filter(|&&d| d != i32::MAX).count();
-                    println!("Reachable nodes: {}", reachable);
+                    println!("  Reachable: {} nodes", reachable);
                 }
             }
         }
@@ -229,16 +230,17 @@ fn run_cuda_algorithms<Ty>(
             );
         }
         let gpu_time = t2.elapsed();
-        println!("GPU time: {:?}", gpu_time);
 
         let mut pr_with_labels: Vec<_> = ranks.iter().enumerate()
             .map(|(i, &r)| (csr_graph.get_node_label(i).unwrap(), r))
             .collect();
         pr_with_labels.sort_by(|a, b| b.1.partial_cmp(&a.1).unwrap());
         
-        println!("Top 3 nodes:");
+        println!("\nPageRank:");
+        println!("  GPU time: {:?}", gpu_time);
+        println!("  Top 3 nodes:");
         for (node, score) in pr_with_labels.iter().take(3) {
-            println!("  {} -> {:.6}", node, score);
+            println!("    {} -> {:.6}", node, score);
         }
     }
 
@@ -258,60 +260,95 @@ fn run_cuda_algorithms<Ty>(
             );
         }
         let gpu_time = t3.elapsed();
-        println!("GPU time: {:?}", gpu_time);
 
         let unique_labels: std::collections::HashSet<_> = labels.iter().collect();
-        println!("Communities detected: {}", unique_labels.len());
+        
+        println!("\nLabel Propagation:");
+        println!("  GPU time: {:?}", gpu_time);
+        println!("  Communities: {}", unique_labels.len());
     }
 }
 
-fn main() {
-    println!("Graph direction (d/u):");
-    let mut direction_input = String::new();
-    io::stdin().read_line(&mut direction_input).expect("Failed to read");
-    let direction = if direction_input.trim().eq_ignore_ascii_case("d") {
-        GraphDirection::Directed
-    } else {
-        GraphDirection::Undirected
-    };
-
-    println!("\nEnter edges (NodeA-NodeB or NodeA-NodeB:Weight):");
-    println!("Empty line to finish:\n");
-
-    let mut input_lines = Vec::<String>::new();
-    loop {
-        print!("> ");
-        io::stdout().flush().expect("Failed to flush");
-        let mut line = String::new();
-        io::stdin().read_line(&mut line).expect("Failed to read");
-        let trimmed = line.trim();
-        if trimmed.is_empty() {
-            break;
+fn generate_random_graph(num_nodes: usize) -> Graph<String, i32, petgraph::Directed> {
+    use rand::Rng;
+    let mut rng = rand::thread_rng();
+    let mut g = Graph::new();
+    
+    // Add nodes
+    let nodes: Vec<_> = (0..num_nodes)
+        .map(|i| g.add_node(i.to_string()))
+        .collect();
+    
+    // Add random edges (average degree ~15)
+    let avg_degree = 15;
+    let num_edges = (num_nodes * avg_degree).min(num_nodes * num_nodes / 10);
+    
+    for _ in 0..num_edges {
+        let from = rng.gen_range(0..num_nodes);
+        let to = rng.gen_range(0..num_nodes);
+        if from != to {
+            let weight = rng.gen_range(1..11);
+            g.add_edge(nodes[from], nodes[to], weight);
         }
-        input_lines.push(trimmed.to_string());
     }
-    let input = input_lines.join("\n");
+    
+    g
+}
 
-    let my_graph = build_graph(&input, direction);
-
-    println!("\nAlgorithm: 1)BFS 2)Bellman-Ford 3)PageRank 4)LabelProp 5)All");
+fn main() {
+    println!("=== Graph Processing: CPU vs GPU ===\n");
+    
+    // Get number of nodes
+    println!("Enter number of nodes:");
+    print!("> ");
+    io::stdout().flush().expect("Failed to flush");
+    let mut nodes_str = String::new();
+    io::stdin().read_line(&mut nodes_str).expect("Failed to read");
+    let num_nodes = nodes_str.trim().parse::<usize>().unwrap_or(1000);
+    
+    // Generate random directed graph
+    println!("\nGenerating random graph with {} nodes...", num_nodes);
+    let g = generate_random_graph(num_nodes);
+    println!("Graph created: {} nodes, {} edges\n", g.node_count(), g.edge_count());
+    
+    // Select algorithm
+    println!("Select algorithm:");
+    println!("1) BFS");
+    println!("2) Bellman-Ford");
+    println!("3) PageRank");
+    println!("4) Label Propagation");
+    println!("5) All algorithms");
     print!("> ");
     io::stdout().flush().unwrap();
     let mut choice_str = String::new();
     io::stdin().read_line(&mut choice_str).unwrap();
     let choice = choice_str.trim().parse::<u8>().unwrap_or(5);
-
-    // Execute on both CPU and GPU
-    match &my_graph {
-        MyGraph::Directed(g) => {
-            println!("\n=== CPU ===");
-            let (bfs_start, bf_start) = run_algorithms(g, choice);
-            run_cuda_algorithms(g, choice, bfs_start, bf_start);
-        }
-        MyGraph::Undirected(g) => {
-            println!("\n=== CPU ===");
-            let (bfs_start, bf_start) = run_algorithms(g, choice);
-            run_cuda_algorithms(g, choice, bfs_start, bf_start);
+    
+    // Performance summary tracking
+    let mut cpu_total = std::time::Duration::ZERO;
+    let mut gpu_total = std::time::Duration::ZERO;
+    
+    // Run algorithms on CPU
+    println!("\n=== CPU Results ===");
+    let cpu_start = std::time::Instant::now();
+    let (bfs_start, bf_start) = run_algorithms(&g, choice);
+    cpu_total = cpu_start.elapsed();
+    
+    // Run algorithms on GPU
+    let gpu_start = std::time::Instant::now();
+    run_cuda_algorithms(&g, choice, bfs_start, bf_start);
+    gpu_total = gpu_start.elapsed();
+    
+    // Performance Summary
+    println!("\n=== Performance Summary ===");
+    println!("Total CPU time: {:?}", cpu_total);
+    println!("Total GPU time: {:?}", gpu_total);
+    if gpu_total.as_secs_f64() > 0.0 {
+        let speedup = cpu_total.as_secs_f64() / gpu_total.as_secs_f64();
+        if speedup > 1.0 {
+            println!("GPU Speedup: {:.2}x faster", speedup);
+        } else {
+            println!("CPU Speedup: {:.2}x faster", 1.0 / speedup);
         }
     }
 }

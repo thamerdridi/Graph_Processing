@@ -1,69 +1,62 @@
-use petgraph::graph::Graph;
-use petgraph::EdgeType;
-use petgraph::visit::EdgeRef;
+use crate::graph::CSRGraph;
 use std::collections::HashMap;
 
-// PageRank: iterative algorithm with damping factor 0.85
-pub fn page_rank<Ty>(graph: &Graph<String, i32, Ty>) -> HashMap<String, f64>
-where
-    Ty: EdgeType,
-{
-    let n = graph.node_count();
-    if n == 0 {
+// PageRank using CSR: iterative algorithm with damping factor 0.85
+pub fn page_rank(csr: &CSRGraph) -> HashMap<String, f64> {
+    if csr.num_nodes == 0 {
         return HashMap::new();
     }
+
     let d = 0.85;
-    let init_rank = 1.0 / n as f64;
-    let mut ranks: HashMap<_, f64> = graph
-        .node_indices()
-        .map(|node| (node, init_rank))
-        .collect();
+    let init_rank = 1.0 / csr.num_nodes as f64;
+    let mut ranks = vec![init_rank; csr.num_nodes];
+    let mut new_ranks = vec![0.0; csr.num_nodes];
+    
+    // Compute out-degrees
+    let mut out_degrees = vec![0; csr.num_nodes];
+    for i in 0..csr.num_nodes {
+        out_degrees[i] = (csr.row_offsets[i + 1] - csr.row_offsets[i]) as usize;
+    }
 
     let max_iter = 100;
     let tol = 1e-6;
 
     for _ in 0..max_iter {
-        let mut new_ranks = HashMap::new();
         let mut diff = 0.0;
 
-        for node in graph.node_indices() {
+        for node in 0..csr.num_nodes {
             let mut rank_sum = 0.0;
-            let incoming = if graph.is_directed() {
-                graph.edges_directed(node, petgraph::Direction::Incoming)
-            } else {
-                graph.edges(node)
-            };
-
-            for edge in incoming {
-                let source = if graph.is_directed() {
-                    edge.source()
-                } else {
-                    let (s, t) = (edge.source(), edge.target());
-                    if s == node { t } else { s }
-                };
-                let out_degree = if graph.is_directed() {
-                    graph.edges_directed(source, petgraph::Direction::Outgoing).count()
-                } else {
-                    graph.edges(source).count()
-                };
-                if out_degree > 0 {
-                    rank_sum += ranks[&source] / out_degree as f64;
+            
+            // Find incoming edges (nodes that point to this node)
+            for src in 0..csr.num_nodes {
+                let start = csr.row_offsets[src] as usize;
+                let end = csr.row_offsets[src + 1] as usize;
+                
+                for i in start..end {
+                    if csr.col_indices[i] as usize == node {
+                        if out_degrees[src] > 0 {
+                            rank_sum += ranks[src] / out_degrees[src] as f64;
+                        }
+                        break;
+                    }
                 }
             }
 
-            let new_rank = (1.0 - d) / (n as f64) + d * rank_sum;
-            new_ranks.insert(node, new_rank);
-            diff += (new_rank - ranks[&node]).abs();
+            new_ranks[node] = (1.0 - d) / (csr.num_nodes as f64) + d * rank_sum;
+            diff += (new_ranks[node] - ranks[node]).abs();
         }
-        ranks = new_ranks;
+
+        ranks.copy_from_slice(&new_ranks);
+        
         if diff < tol {
             break;
         }
     }
 
     let mut result = HashMap::new();
-    for node in graph.node_indices() {
-        result.insert(graph[node].clone(), ranks[&node]);
+    for i in 0..csr.num_nodes {
+        let label = csr.get_node_label(i).unwrap().clone();
+        result.insert(label, ranks[i]);
     }
     result
 }

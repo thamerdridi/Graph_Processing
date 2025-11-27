@@ -1,78 +1,67 @@
-use petgraph::graph::{Graph, NodeIndex};
-use petgraph::EdgeType;
+use crate::graph::CSRGraph;
 use std::collections::HashMap;
-use petgraph::visit::EdgeRef;
-use std::i32;
 
-// Bellman-Ford: returns (distances, predecessors) or None if negative cycle detected
-pub fn bellman_ford<Ty>(
-    graph: &Graph<String, i32, Ty>,
-    start: &str,
-) -> Option<(HashMap<String, i32>, HashMap<String, String>)>
-where
-    Ty: EdgeType,
-{
-    let mut distances: HashMap<NodeIndex, i32> = HashMap::new();
-    let mut predecessors: HashMap<NodeIndex, NodeIndex> = HashMap::new();
-    for node in graph.node_indices() {
-        distances.insert(node, i32::MAX);
-    }
+// Bellman-Ford using CSR: returns (distances, predecessors) or None if negative cycle detected
+pub fn bellman_ford(csr: &CSRGraph, start: &str) -> Option<(HashMap<String, i32>, HashMap<String, String>)> {
+    let start_idx = csr.get_node_idx(start)?;
     
-    let start_node = graph.node_indices().find(|&node| graph[node] == start)?;
-    distances.insert(start_node, 0);
+    let mut distances = vec![i32::MAX; csr.num_nodes];
+    let mut predecessors = vec![-1i32; csr.num_nodes];
+    distances[start_idx] = 0;
 
-    let num_nodes = graph.node_count();
+    // Relax edges (num_nodes - 1) times
+    for _ in 0..csr.num_nodes - 1 {
+        let mut updated = false;
+        for u in 0..csr.num_nodes {
+            if distances[u] == i32::MAX {
+                continue;
+            }
+            let start = csr.row_offsets[u] as usize;
+            let end = csr.row_offsets[u + 1] as usize;
+            
+            for i in start..end {
+                let v = csr.col_indices[i] as usize;
+                let weight = csr.edge_weights[i];
+                if distances[u] + weight < distances[v] {
+                    distances[v] = distances[u] + weight;
+                    predecessors[v] = u as i32;
+                    updated = true;
+                }
+            }
+        }
+        if !updated {
+            break;
+        }
+    }
 
-    for _ in 0..num_nodes - 1 {
-        for edge in graph.edge_references() {
-            let u = edge.source();
-            let v = edge.target();
-            let weight = *edge.weight();
-            if graph.is_directed() {
-                if distances[&u] != i32::MAX && distances[&u] + weight < distances[&v] {
-                    distances.insert(v, distances[&u] + weight);
-                    predecessors.insert(v, u);
-                }
-            } else {
-                if distances[&u] != i32::MAX && distances[&u] + weight < distances[&v] {
-                    distances.insert(v, distances[&u] + weight);
-                    predecessors.insert(v, u);
-                }
-                if distances[&v] != i32::MAX && distances[&v] + weight < distances[&u] {
-                    distances.insert(u, distances[&v] + weight);
-                    predecessors.insert(u, v);
-                }
+    // Check for negative cycles
+    for u in 0..csr.num_nodes {
+        if distances[u] == i32::MAX {
+            continue;
+        }
+        let start = csr.row_offsets[u] as usize;
+        let end = csr.row_offsets[u + 1] as usize;
+        
+        for i in start..end {
+            let v = csr.col_indices[i] as usize;
+            let weight = csr.edge_weights[i];
+            if distances[u] + weight < distances[v] {
+                println!("Graph contains a negative weight cycle.");
+                return None;
             }
         }
     }
 
-    for edge in graph.edge_references() {
-        let u = edge.source();
-        let v = edge.target();
-        let weight = *edge.weight();
-        if graph.is_directed() {
-            if distances[&u] != i32::MAX && distances[&u] + weight < distances[&v] {
-                println!("Graph contains a negative weight cycle.");
-                return None;
-            }
-        } else {
-            if distances[&u] != i32::MAX && distances[&u] + weight < distances[&v] {
-                println!("Graph contains a negative weight cycle.");
-                return None;
-            }
-            if distances[&v] != i32::MAX && distances[&v] + weight < distances[&u] {
-                println!("Graph contains a negative weight cycle.");
-                return None;
-            }
-        }
-    }
-
+    // Convert to HashMap with labels
     let mut result_distances: HashMap<String, i32> = HashMap::new();
     let mut result_predecessors: HashMap<String, String> = HashMap::new();
-    for node in graph.node_indices() {
-        result_distances.insert(graph[node].clone(), *distances.get(&node).unwrap());
-        if let Some(&pred) = predecessors.get(&node) {
-            result_predecessors.insert(graph[node].clone(), graph[pred].clone());
+    
+    for i in 0..csr.num_nodes {
+        let label = csr.get_node_label(i).unwrap().clone();
+        result_distances.insert(label.clone(), distances[i]);
+        if predecessors[i] >= 0 {
+            let pred_label = csr.get_node_label(predecessors[i] as usize).unwrap().clone();
+            result_predecessors.insert(label, pred_label);
         }
     }
 
