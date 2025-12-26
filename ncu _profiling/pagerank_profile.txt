@@ -1,0 +1,98 @@
+=== Graph Processing: CPU vs GPU ===
+
+Enter number of nodes:
+> 
+Generating random graph with 100000 nodes...
+Graph created: 100000 nodes, 1499981 edges
+
+Select algorithm:
+1) BFS
+2) Bellman-Ford
+3) PageRank
+4) Label Propagation
+5) All algorithms
+> 
+=== CPU Results ===
+
+PageRank:
+  CPU time: 32.735397ms
+  Top 3 nodes:
+    99487 -> 0.000022
+    71612 -> 0.000021
+    29920 -> 0.000021
+
+=== GPU Results ===
+==PROF== Connected to process 93919 (/home/thamer/Graph_Processing/target/release/Graph_Processing)
+==PROF== Profiling "pagerank_push_kernel" - 0 (1/1): 0%....50%....100% - 9 passes
+
+PageRank:
+  GPU time: 910.68524ms
+  Top 3 nodes:
+    99487 -> 0.000022
+    71612 -> 0.000021
+    29920 -> 0.000021
+
+=== Performance Summary ===
+Total CPU time: 633.08278ms
+Total GPU time: 1.497558427s
+==PROF== Disconnected from process 93919
+[93919] Graph_Processing@127.0.0.1
+  pagerank_push_kernel(const int *, const int *, const float *, float *, int) (391, 1, 1)x(256, 1, 1), Context 1, Stream 7, Device 0, CC 8.6
+    Section: GPU Speed Of Light Throughput
+    ----------------------- ------------- ------------
+    Metric Name               Metric Unit Metric Value
+    ----------------------- ------------- ------------
+    DRAM Frequency          cycle/nsecond         5.86
+    SM Frequency            cycle/nsecond         1.19
+    Elapsed Cycles                  cycle      178,988
+    Memory Throughput                   %        65.18
+    DRAM Throughput                     %        30.10
+    Duration                      usecond       149.95
+    L1/TEX Cache Throughput             %        91.29
+    L2 Cache Throughput                 %        65.18
+    SM Active Cycles                cycle   171,551.15
+    Compute (SM) Throughput             %        15.35
+    ----------------------- ------------- ------------
+
+    WRN   Memory is more heavily utilized than Compute: Look at the Memory Workload Analysis section to identify the L2 
+          bottleneck. Check memory replay (coalescing) metrics to make sure you're efficiently utilizing the bytes      
+          transferred. Also consider whether it is possible to do more work per memory access (kernel fusion) or        
+          whether there are values you can (re)compute.                                                                 
+
+    Section: Launch Statistics
+    -------------------------------- --------------- ---------------
+    Metric Name                          Metric Unit    Metric Value
+    -------------------------------- --------------- ---------------
+    Block Size                                                   256
+    Function Cache Configuration                     CachePreferNone
+    Grid Size                                                    391
+    Registers Per Thread             register/thread              20
+    Shared Memory Configuration Size           Kbyte            8.19
+    Driver Shared Memory Per Block       Kbyte/block            1.02
+    Dynamic Shared Memory Per Block       byte/block               0
+    Static Shared Memory Per Block        byte/block               0
+    Threads                                   thread         100,096
+    Waves Per SM                                                3.26
+    -------------------------------- --------------- ---------------
+
+    Section: Occupancy
+    ------------------------------- ----------- ------------
+    Metric Name                     Metric Unit Metric Value
+    ------------------------------- ----------- ------------
+    Block Limit SM                        block           16
+    Block Limit Registers                 block           10
+    Block Limit Shared Mem                block            8
+    Block Limit Warps                     block            6
+    Theoretical Active Warps per SM        warp           48
+    Theoretical Occupancy                     %          100
+    Achieved Occupancy                        %        87.15
+    Achieved Active Warps Per SM           warp        41.83
+    ------------------------------- ----------- ------------
+
+    WRN   This kernel's theoretical occupancy is not impacted by any block limit. The difference between calculated     
+          theoretical (100.0%) and measured achieved occupancy (87.1%) can be the result of warp scheduling overheads   
+          or workload imbalances during the kernel execution. Load imbalances can occur between warps within a block    
+          as well as across blocks of the same kernel. See the CUDA Best Practices Guide                                
+          (https://docs.nvidia.com/cuda/cuda-c-best-practices-guide/index.html#occupancy) for more details on           
+          optimizing occupancy.                                                                                         
+
